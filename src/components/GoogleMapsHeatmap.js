@@ -8,14 +8,14 @@ const SIGNIFICANT_CHANGE_THRESHOLD = 1; // Adjust this value based on your needs
 
 const isSignificantChange = (oldBounds, newBounds) => {
   if (!oldBounds) return true;
-  
-  const latChange = Math.abs(oldBounds.north - newBounds.north) + 
-                   Math.abs(oldBounds.south - newBounds.south);
-  const lngChange = Math.abs(oldBounds.east - newBounds.east) + 
-                   Math.abs(oldBounds.west - newBounds.west);
-                   
-  return latChange > SIGNIFICANT_CHANGE_THRESHOLD || 
-         lngChange > SIGNIFICANT_CHANGE_THRESHOLD;
+
+  const latChange = Math.abs(oldBounds.north - newBounds.north) +
+    Math.abs(oldBounds.south - newBounds.south);
+  const lngChange = Math.abs(oldBounds.east - newBounds.east) +
+    Math.abs(oldBounds.west - newBounds.west);
+
+  return latChange > SIGNIFICANT_CHANGE_THRESHOLD ||
+    lngChange > SIGNIFICANT_CHANGE_THRESHOLD;
 };
 
 export default function GoogleMapsHeatmap() {
@@ -29,7 +29,7 @@ export default function GoogleMapsHeatmap() {
   const [lastFetchedBounds, setLastFetchedBounds] = useState(null);
   const mapRef = useRef(null);
   const debounceTimer = useRef(null);
-  
+
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: "AIzaSyB0qltSCcuvldlHq_n055xyGJI3HDHH39A",
     libraries: ["visualization"],
@@ -37,7 +37,7 @@ export default function GoogleMapsHeatmap() {
 
   const fetchLocalityData = useCallback((lat, lng) => {
     console.log('Fetching locality data for:', { lat, lng });
-    
+
     fetch('https://insightq.beta.staging.anarock.com/get_locality_data', {
       method: 'POST',
       headers: {
@@ -75,7 +75,7 @@ export default function GoogleMapsHeatmap() {
 
   const handleMouseOver = useCallback((point) => {
     if (point.type !== 'locality') return;
-    
+
     clearTimeout(window.tooltipTimeout);
     setSelectedPoint(point);
     setShowTooltip(true);
@@ -103,7 +103,7 @@ export default function GoogleMapsHeatmap() {
 
   const handleMarkerClick = useCallback((point) => {
     if (point.type !== 'locality') return;
-    
+
     console.log('Clicked point:', point);
     setSelectedPoint(point);
     setShowTooltip(true);
@@ -113,11 +113,11 @@ export default function GoogleMapsHeatmap() {
 
   const handleBoundsChange = useCallback(() => {
     if (!mapRef.current) return;
-    
+
     const map = mapRef.current;
     const newZoom = map.getZoom();
     const newBounds = map.getBounds().toJSON();
-    
+
     setZoomLevel(newZoom);
     setDelta({
       lat: Math.abs(newBounds.north - newBounds.south),
@@ -132,7 +132,7 @@ export default function GoogleMapsHeatmap() {
     debounceTimer.current = setTimeout(() => {
       if (isSignificantChange(lastFetchedBounds, newBounds)) {
         console.log('Fetching new data due to significant bounds change. Zoom level:', newZoom);
-        
+
         fetch('https://insightq.beta.staging.anarock.com/get_cp2', {
           method: 'POST',
           headers: {
@@ -177,7 +177,7 @@ export default function GoogleMapsHeatmap() {
                 const isLocality = !!item.locality_lat_long;
                 const latLongString = item.locality_lat_long || item.district_lat_long;
                 const [lat, lng] = latLongString.split(',').map(Number);
-                
+
                 return {
                   lat,
                   lng,
@@ -186,10 +186,10 @@ export default function GoogleMapsHeatmap() {
                   type: isLocality ? 'locality' : 'district'
                 };
               })
-              .filter(item => 
-                item.lat !== 0 && 
-                item.lng !== 0 && 
-                !isNaN(item.lat) && 
+              .filter(item =>
+                item.lat !== 0 &&
+                item.lng !== 0 &&
+                !isNaN(item.lat) &&
                 !isNaN(item.lng)
               );
 
@@ -214,7 +214,7 @@ export default function GoogleMapsHeatmap() {
 
   useEffect(() => {
     let isMounted = true;
-    
+
     if (mapRef.current) {
       handleBoundsChange();
     }
@@ -230,13 +230,13 @@ export default function GoogleMapsHeatmap() {
 
   const renderInfoWindowContent = useCallback((point) => {
     return (
-      <div 
-        className="text-black p-4 bg-white shadow-lg rounded-lg max-w-md" 
-        onMouseEnter={handleInfoWindowMouseEnter} 
+      <div
+        className="text-black p-4 bg-white shadow-lg rounded-lg max-w-md"
+        onMouseEnter={handleInfoWindowMouseEnter}
         onMouseLeave={handleInfoWindowMouseLeave}
       >
         <h3 className="text-lg font-bold mb-2">{point.name}</h3>
-        
+
         {localityData === null ? (
           <p className="text-sm text-gray-500">Loading agent details...</p>
         ) : localityData.length === 0 ? (
@@ -248,9 +248,9 @@ export default function GoogleMapsHeatmap() {
                 {/* Agent Header with Photo */}
                 <div className="flex items-center gap-4 mb-3">
                   {agent["Profile Photo"] && (
-                    <img 
-                      src={agent["Profile Photo"]} 
-                      alt="Profile" 
+                    <img
+                      src={agent["Profile Photo"]}
+                      alt="Profile"
                       className="w-16 h-16 object-cover rounded-full"
                     />
                   )}
@@ -317,9 +317,9 @@ export default function GoogleMapsHeatmap() {
         )}
 
         <div className="mt-3 pt-2 border-t">
-          <a 
-            href={`https://www.google.com/maps/search/?api=1&query=${point.lat},${point.lng}`} 
-            target="_blank" 
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${point.lat},${point.lng}`}
+            target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-blue-500 hover:text-blue-700"
           >
@@ -331,10 +331,10 @@ export default function GoogleMapsHeatmap() {
   }, [handleInfoWindowMouseEnter, handleInfoWindowMouseLeave, localityData]);
 
   const getHeatmapOptions = useCallback((zoom) => {
-    const baseRadius = zoom <= 8 ? 30 : 
-                      zoom <= 10 ? 25 : 
-                      zoom <= 12 ? 20 : 15;
-    
+    const baseRadius = zoom <= 8 ? 30 :
+      zoom <= 10 ? 25 :
+        zoom <= 12 ? 20 : 15;
+
     return {
       radius: baseRadius,
       opacity: 0.5,
@@ -364,19 +364,26 @@ export default function GoogleMapsHeatmap() {
 
   const renderMap = () => {
     return (
-      <div className="p-4 bg-gray-100 text-center w-full">
-        <div className="mb-4 p-4 bg-white shadow rounded-lg">
-          <p className="text-lg text-black font-semibold">Untapped CPs</p>
-          <p className="text-sm text-gray-600">Zoom in to get CP details</p>
-          <p className="text-sm text-gray-600">Initial state will show untapped CPs district wise (red means more CPs)</p>
-          <p className="text-sm text-gray-600">Zooming in will give locality wise data</p>
-          <p className="text-sm text-gray-600">At locality level, click to get CP details</p>
+      <div className="p-6 bg-gray-100 text-center w-full">
+        <div className="mb-6 p-6 bg-white shadow-lg rounded-lg space-y-4">
+          <p className="text-xl text-black font-semibold">Untapped CP Market</p>
+          <p className="text-sm text-gray-700">Zoom in to get CP details</p>
+          <p className="text-sm text-gray-700">
+            Initial state will show untapped CPs district-wise (red means more CPs)
+          </p>
+          <p className="text-sm text-gray-700">
+            Zooming in will give locality-wise data
+          </p>
+          <p className="text-sm text-gray-700">
+            At locality level, click to get CP details
+          </p>
         </div>
+
         <div className="w-full h-[500px] rounded-lg overflow-hidden shadow-lg">
           <GoogleMap
             mapContainerStyle={{ width: "100%", height: "100%" }}
             center={center}
-            zoom={6}
+            zoom={zoomLevel}
             onLoad={(map) => (mapRef.current = map)}
             onZoomChanged={handleZoomChanged}
             onBoundsChanged={handleBoundsChange}
@@ -410,6 +417,7 @@ export default function GoogleMapsHeatmap() {
           </GoogleMap>
         </div>
       </div>
+
     );
   };
 
