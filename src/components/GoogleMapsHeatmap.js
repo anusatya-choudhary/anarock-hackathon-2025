@@ -36,6 +36,8 @@ export default function GoogleMapsHeatmap() {
   });
 
   const fetchLocalityData = useCallback((lat, lng) => {
+    console.log('Fetching locality data for:', { lat, lng });
+    
     fetch('https://insightq.beta.staging.anarock.com/get_locality_data', {
       method: 'POST',
       headers: {
@@ -77,7 +79,9 @@ export default function GoogleMapsHeatmap() {
     clearTimeout(window.tooltipTimeout);
     setSelectedPoint(point);
     setShowTooltip(true);
-  }, []);
+    setLocalityData(null); // Reset locality data
+    fetchLocalityData(point.lat, point.lng);
+  }, [fetchLocalityData]);
 
   const handleMouseOut = useCallback(() => {
     window.tooltipTimeout = setTimeout(() => {
@@ -121,14 +125,11 @@ export default function GoogleMapsHeatmap() {
     });
     setMapBounds(newBounds);
 
-    // Clear any existing timer
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
     }
 
-    // Set new timer
     debounceTimer.current = setTimeout(() => {
-      // Check if the change is significant enough to fetch new data
       if (isSignificantChange(lastFetchedBounds, newBounds)) {
         console.log('Fetching new data due to significant bounds change');
         
@@ -167,37 +168,40 @@ export default function GoogleMapsHeatmap() {
 
             const transformedData = dataArray
               .filter(item => {
-                // Check if we have either district or locality data
+                // Include both locality and district data points
                 return item && (
-                  (item.district_lat_long && item.District) ||
-                  (item.locality_lat_long && item.Locality)
+                  (item.locality_lat_long && item.Locality) ||
+                  (item.district_lat_long && item.District)
                 );
               })
               .map(item => {
-                // Determine which lat/long and name to use based on available data
+                // Use locality data if available, otherwise use district data
+                const isLocality = !!item.locality_lat_long;
                 const latLongString = item.locality_lat_long || item.district_lat_long;
-                const [lat, lng] = (latLongString || '0,0').split(',').map(Number);
+                const [lat, lng] = latLongString.split(',').map(Number);
                 
                 return {
                   lat,
                   lng,
                   weight: item.count || 0,
-                  name: item.Locality || item.District || 'Unknown Location',
-                  type: item.Locality ? 'locality' : 'district',
-                  locality: item.Locality // Keep locality field for tooltip filtering
+                  name: isLocality ? item.Locality : item.District,
+                  type: isLocality ? 'locality' : 'district'
                 };
               })
-              .filter(item => item.lat !== 0 && item.lng !== 0);
+              .filter(item => 
+                item.lat !== 0 && 
+                item.lng !== 0 && 
+                !isNaN(item.lat) && 
+                !isNaN(item.lng)
+              );
 
             setData(transformedData);
-            setLastFetchedBounds(newBounds); // Update last fetched bounds
+            setLastFetchedBounds(newBounds);
           })
           .catch(err => {
             console.error("API Error:", err);
             setData([]);
           });
-      } else {
-        console.log('Skipping data fetch - change not significant');
       }
     }, DEBOUNCE_DELAY);
   }, [lastFetchedBounds]);
@@ -219,8 +223,6 @@ export default function GoogleMapsHeatmap() {
   }, [handleBoundsChange]);
 
   const renderInfoWindowContent = useCallback((point) => {
-    console.log('Rendering info window with localityData:', localityData);
-    
     return (
       <div 
         className="text-black p-4 bg-white shadow-lg rounded-lg max-w-md" 
