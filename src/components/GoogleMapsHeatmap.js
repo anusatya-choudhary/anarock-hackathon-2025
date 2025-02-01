@@ -4,7 +4,7 @@ import { GoogleMap, useJsApiLoader, HeatmapLayer, Marker, InfoWindow } from "@re
 const center = { lat: 19.7515, lng: 75.7139 }; // Default center (Maharashtra)
 
 const DEBOUNCE_DELAY = 1000; // 1 second delay
-const SIGNIFICANT_CHANGE_THRESHOLD = 0.1; // Adjust this value based on your needs
+const SIGNIFICANT_CHANGE_THRESHOLD = 1; // Adjust this value based on your needs
 
 const isSignificantChange = (oldBounds, newBounds) => {
   if (!oldBounds) return true;
@@ -57,20 +57,27 @@ export default function GoogleMapsHeatmap() {
     })
       .then(res => res.json())
       .then(data => {
-        console.log('Locality Data:', data);
+        console.log('Locality Data Response:', data);
         if (data.status === 'success' && data.response) {
           setLocalityData(data.response);
+        } else {
+          console.error('Invalid locality data format:', data);
+          setLocalityData(null);
         }
       })
-      .catch(err => console.error('Error fetching locality data:', err));
+      .catch(err => {
+        console.error('Error fetching locality data:', err);
+        setLocalityData(null);
+      });
   }, []);
 
   const handleMouseOver = useCallback((point) => {
+    if (point.type !== 'locality') return;
+    
     clearTimeout(window.tooltipTimeout);
     setSelectedPoint(point);
     setShowTooltip(true);
-    fetchLocalityData(point.lat, point.lng);
-  }, [fetchLocalityData]);
+  }, []);
 
   const handleMouseOut = useCallback(() => {
     window.tooltipTimeout = setTimeout(() => {
@@ -89,6 +96,16 @@ export default function GoogleMapsHeatmap() {
       setSelectedPoint(null);
     }, 1000);
   }, []);
+
+  const handleMarkerClick = useCallback((point) => {
+    if (point.type !== 'locality') return;
+    
+    console.log('Clicked point:', point);
+    setSelectedPoint(point);
+    setShowTooltip(true);
+    setLocalityData(null);
+    fetchLocalityData(point.lat, point.lng);
+  }, [fetchLocalityData]);
 
   const handleBoundsChange = useCallback(() => {
     if (!mapRef.current) return;
@@ -149,14 +166,25 @@ export default function GoogleMapsHeatmap() {
             }
 
             const transformedData = dataArray
-              .filter(item => item && item.locality_lat_long)
+              .filter(item => {
+                // Check if we have either district or locality data
+                return item && (
+                  (item.district_lat_long && item.District) ||
+                  (item.locality_lat_long && item.Locality)
+                );
+              })
               .map(item => {
-                const [lat, lng] = (item.locality_lat_long || '0,0').split(',').map(Number);
+                // Determine which lat/long and name to use based on available data
+                const latLongString = item.locality_lat_long || item.district_lat_long;
+                const [lat, lng] = (latLongString || '0,0').split(',').map(Number);
+                
                 return {
                   lat,
                   lng,
                   weight: item.count || 0,
-                  name: item.Locality || item.District || 'Unknown Location'
+                  name: item.Locality || item.District || 'Unknown Location',
+                  type: item.Locality ? 'locality' : 'district',
+                  locality: item.Locality // Keep locality field for tooltip filtering
                 };
               })
               .filter(item => item.lat !== 0 && item.lng !== 0);
@@ -191,6 +219,8 @@ export default function GoogleMapsHeatmap() {
   }, [handleBoundsChange]);
 
   const renderInfoWindowContent = useCallback((point) => {
+    console.log('Rendering info window with localityData:', localityData);
+    
     return (
       <div 
         className="text-black p-4 bg-white shadow-lg rounded-lg max-w-md" 
@@ -199,7 +229,11 @@ export default function GoogleMapsHeatmap() {
       >
         <h3 className="text-lg font-bold mb-2">{point.name}</h3>
         
-        {localityData && localityData.length > 0 ? (
+        {localityData === null ? (
+          <p className="text-sm text-gray-500">Loading agent details...</p>
+        ) : localityData.length === 0 ? (
+          <p className="text-sm text-gray-500">No agents found in this locality</p>
+        ) : (
           <div className="space-y-4">
             {localityData.map((agent) => (
               <div key={agent.id} className="border-b pb-4">
@@ -272,8 +306,6 @@ export default function GoogleMapsHeatmap() {
               </div>
             ))}
           </div>
-        ) : (
-          <p className="text-sm text-gray-500">Loading agent details...</p>
         )}
 
         <div className="mt-3 pt-2 border-t">
@@ -289,6 +321,21 @@ export default function GoogleMapsHeatmap() {
       </div>
     );
   }, [handleInfoWindowMouseEnter, handleInfoWindowMouseLeave, localityData]);
+
+  const getHeatmapOptions = useCallback((zoom) => {
+    const baseRadius = zoom <= 8 ? 30 : 22.5; // Larger radius for district view
+    
+    return {
+      radius: baseRadius,
+      opacity: 0.8,
+      gradient: [
+        "rgba(0, 255, 0, 0)",
+        "rgba(255, 255, 0, 1)",
+        "rgba(255, 165, 0, 1)",
+        "rgba(255, 0, 0, 1)",
+      ],
+    };
+  }, []);
 
   const renderMap = () => {
     return (
@@ -313,16 +360,7 @@ export default function GoogleMapsHeatmap() {
                 location: new window.google.maps.LatLng(lat, lng),
                 weight
               }))}
-              options={{
-                radius: 22.5,
-                opacity: 0.8,
-                gradient: [
-                  "rgba(0, 255, 0, 0)",
-                  "rgba(255, 255, 0, 1)",
-                  "rgba(255, 165, 0, 1)",
-                  "rgba(255, 0, 0, 1)",
-                ],
-              }}
+              options={getHeatmapOptions(zoomLevel)}
             />
             {data.map((point, index) => (
               <Marker
@@ -330,6 +368,7 @@ export default function GoogleMapsHeatmap() {
                 position={{ lat: point.lat, lng: point.lng }}
                 onMouseOver={() => handleMouseOver(point)}
                 onMouseOut={handleMouseOut}
+                onClick={() => handleMarkerClick(point)}
                 opacity={0}
               />
             ))}
