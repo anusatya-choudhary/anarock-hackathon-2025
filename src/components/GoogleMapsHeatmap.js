@@ -131,7 +131,7 @@ export default function GoogleMapsHeatmap() {
 
     debounceTimer.current = setTimeout(() => {
       if (isSignificantChange(lastFetchedBounds, newBounds)) {
-        console.log('Fetching new data due to significant bounds change');
+        console.log('Fetching new data due to significant bounds change. Zoom level:', newZoom);
         
         fetch('https://insightq.beta.staging.anarock.com/get_cp2', {
           method: 'POST',
@@ -168,14 +168,12 @@ export default function GoogleMapsHeatmap() {
 
             const transformedData = dataArray
               .filter(item => {
-                // Include both locality and district data points
                 return item && (
                   (item.locality_lat_long && item.Locality) ||
                   (item.district_lat_long && item.District)
                 );
               })
               .map(item => {
-                // Use locality data if available, otherwise use district data
                 const isLocality = !!item.locality_lat_long;
                 const latLongString = item.locality_lat_long || item.district_lat_long;
                 const [lat, lng] = latLongString.split(',').map(Number);
@@ -195,6 +193,7 @@ export default function GoogleMapsHeatmap() {
                 !isNaN(item.lng)
               );
 
+            console.log(`Updated data with ${transformedData.length} points at zoom level ${newZoom}`);
             setData(transformedData);
             setLastFetchedBounds(newBounds);
           })
@@ -205,6 +204,13 @@ export default function GoogleMapsHeatmap() {
       }
     }, DEBOUNCE_DELAY);
   }, [lastFetchedBounds]);
+
+  const handleZoomChanged = useCallback(() => {
+    if (!mapRef.current) return;
+    const newZoom = mapRef.current.getZoom();
+    setZoomLevel(newZoom);
+    handleBoundsChange();
+  }, [handleBoundsChange]);
 
   useEffect(() => {
     let isMounted = true;
@@ -325,18 +331,35 @@ export default function GoogleMapsHeatmap() {
   }, [handleInfoWindowMouseEnter, handleInfoWindowMouseLeave, localityData]);
 
   const getHeatmapOptions = useCallback((zoom) => {
-    const baseRadius = zoom <= 8 ? 30 : 22.5; // Larger radius for district view
+    const baseRadius = zoom <= 8 ? 30 : 
+                      zoom <= 10 ? 25 : 
+                      zoom <= 12 ? 20 : 15;
     
     return {
       radius: baseRadius,
-      opacity: 0.8,
+      opacity: 0.5,
+      dissipating: true,
       gradient: [
-        "rgba(0, 255, 0, 0)",
-        "rgba(255, 255, 0, 1)",
-        "rgba(255, 165, 0, 1)",
-        "rgba(255, 0, 0, 1)",
+        'rgba(0, 0, 0, 0)',         // transparent
+        'rgba(65, 105, 225, 1)',    // royal blue
+        'rgba(30, 144, 255, 1)',    // dodger blue
+        'rgba(0, 191, 255, 1)',     // deep sky blue
+        'rgba(0, 250, 154, 1)',     // medium spring green
+        'rgba(255, 215, 0, 1)',     // gold
+        'rgba(255, 140, 0, 1)',     // dark orange
+        'rgba(255, 69, 0, 1)',      // orange red
+        'rgba(255, 0, 0, 1)'        // red
       ],
+      maxIntensity: zoom <= 8 ? 8 : 4,
+      minIntensity: 1
     };
+  }, []);
+
+  const transformDataForHeatmap = useCallback((dataPoints) => {
+    return dataPoints.map(({ lat, lng, weight }) => ({
+      location: new window.google.maps.LatLng(lat, lng),
+      weight: Math.pow(weight + 1, 1.5)
+    }));
   }, []);
 
   const renderMap = () => {
@@ -354,14 +377,11 @@ export default function GoogleMapsHeatmap() {
             center={center}
             zoom={6}
             onLoad={(map) => (mapRef.current = map)}
-            onZoomChanged={handleBoundsChange}
+            onZoomChanged={handleZoomChanged}
             onBoundsChanged={handleBoundsChange}
           >
             <HeatmapLayer
-              data={data.map(({ lat, lng, weight }) => ({
-                location: new window.google.maps.LatLng(lat, lng),
-                weight
-              }))}
+              data={transformDataForHeatmap(data)}
               options={getHeatmapOptions(zoomLevel)}
             />
             {data.map((point, index) => (
