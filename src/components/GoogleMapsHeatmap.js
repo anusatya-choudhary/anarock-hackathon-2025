@@ -364,12 +364,13 @@ export default function GoogleMapsHeatmap() {
 
   const renderMap = () => {
     return (
-      <div className="p-4 bg-gray-100 text-center">
+      <div className="p-4 bg-gray-100 text-center w-full">
         <div className="mb-4 p-4 bg-white shadow rounded-lg">
-          <p className="text-lg text-black font-semibold">Current Zoom Level: {zoomLevel}</p>
-          <p className="text-sm text-gray-600">Map Bounds: {mapBounds ? JSON.stringify(mapBounds) : "Fetching..."}</p>
-          <p className="text-sm text-gray-600">Delta: Lat {delta.lat.toFixed(4)}, Lng {delta.lng.toFixed(4)}</p>
-          <p className="text-sm text-gray-600">Total Points: {data.length}</p>
+          <p className="text-lg text-black font-semibold">Untapped CPs</p>
+          <p className="text-sm text-gray-600">Zoom in to get CP details</p>
+          <p className="text-sm text-gray-600">Initial state will show untapped CPs district wise (red means more CPs)</p>
+          <p className="text-sm text-gray-600">Zooming in will give locality wise data</p>
+          <p className="text-sm text-gray-600">At locality level, click to get CP details</p>
         </div>
         <div className="w-full h-[500px] rounded-lg overflow-hidden shadow-lg">
           <GoogleMap
